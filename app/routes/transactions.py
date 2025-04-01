@@ -1,8 +1,9 @@
+#transactions.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import insert
 from pydantic import BaseModel
-from uuid import uuid4
+from uuid import uuid4, UUID  
 from datetime import datetime
 from app.database.models import Monto, Fecha, Ubicacion, MetodoPago, Transaccion
 
@@ -20,7 +21,7 @@ router = APIRouter()
 
 # Modelo Pydantic para recibir transacción completa
 class TransaccionCompleta(BaseModel):
-    usuario_id: str
+    usuario_id: UUID
     monto: float
     moneda: str
     ciudad: str
@@ -30,10 +31,10 @@ class TransaccionCompleta(BaseModel):
 
 @router.post("/registrar")
 async def registrar_transaccion(data: TransaccionCompleta, session: AsyncSession = Depends(get_session)):
-    transaccion_id = str(uuid4())
+    transaccion_id = uuid4()
 
     # Insertar en montos
-    monto_id = str(uuid4())
+    monto_id = uuid4()
     await session.execute(insert(Monto).values(
         id_monto=monto_id,
         valor=data.monto,
@@ -41,14 +42,14 @@ async def registrar_transaccion(data: TransaccionCompleta, session: AsyncSession
     ))
 
     # Insertar en fechas
-    fecha_id = str(uuid4())
+    fecha_id = uuid4()
     await session.execute(insert(Fecha).values(
         id_fecha=fecha_id,
         fecha=datetime.now()
     ))
 
     # Insertar en ubicaciones
-    ubicacion_id = str(uuid4())
+    ubicacion_id = uuid4()
     await session.execute(insert(Ubicacion).values(
         id_ubicacion=ubicacion_id,
         ciudad=data.ciudad,
@@ -56,17 +57,17 @@ async def registrar_transaccion(data: TransaccionCompleta, session: AsyncSession
     ))
 
     # Insertar en métodos de pago
-    metodo_id = str(uuid4())
+    metodo_id = uuid4()
     await session.execute(insert(MetodoPago).values(
         id_metodo_pago=metodo_id,
         nombre=data.metodo_pago,
         proveedor=data.proveedor
     ))
-
+    
     # Insertar transacción principal
     await session.execute(insert(Transaccion).values(
         id_transaccion=transaccion_id,
-        usuario_id=data.usuario_id,
+        usuario_id=data.usuario_id, 
         monto_id=monto_id,
         fecha_id=fecha_id,
         ubicacion_id=ubicacion_id,
@@ -79,8 +80,8 @@ async def registrar_transaccion(data: TransaccionCompleta, session: AsyncSession
     # Evaluar posible fraude (regla simple)
     if data.monto > 10000:
         fraude = {
-            "id_transaccion": transaccion_id,
-            "usuario_id": data.usuario_id,
+            "id_transaccion": str(transaccion_id),
+            "usuario_id": str(data.usuario_id),
             "monto": data.monto,
             "ubicacion": data.ciudad,
             "metodo_pago": data.metodo_pago,
@@ -94,3 +95,12 @@ async def registrar_transaccion(data: TransaccionCompleta, session: AsyncSession
         await fraudes_collection.insert_one(fraude)
 
     return {"mensaje": "Transacción registrada", "id_transaccion": transaccion_id}
+
+# Endpoint para consultar fraudes por usuario
+@router.get("/fraudes/{usuario_id}")
+async def obtener_fraudes(usuario_id: str):
+    fraudes = await fraudes_collection.find({"usuario_id": usuario_id}).to_list(100)
+    if not fraudes:
+        raise HTTPException(status_code=404, detail="No se encontraron fraudes para este usuario")
+    return {"usuario_id": usuario_id, "fraudes": fraudes}
+
