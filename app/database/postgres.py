@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from typing import AsyncGenerator
+
 load_dotenv()
 
 DATABASE_URL = (
@@ -25,3 +27,8 @@ async def probar_conexion():
         print("✅ Conexión a PostgreSQL exitosa")
     except SQLAlchemyError as e:
         print("❌ Error de conexión:", e)
+
+
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
+    async with SessionLocal() as session:
+        yield session
